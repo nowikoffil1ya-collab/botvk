@@ -10,7 +10,7 @@ from vk_api.utils import get_random_id
 # ==========================================
 TOKEN = os.getenv('VK_TOKEN') or "ТВОЙ_ТОКЕН_ЗДЕСЬ"
 
-# ⚠️ СЮДА ДОБАВЛЕН НОВЫЙ ПРЕПОДАВАТЕЛЬ segatakai
+# ⚠️ СПИСОК ПРЕПОДАВАТЕЛЕЙ
 RAW_ADMIN_IDS = [577603865, 410091203, "ekaterina_zaychenko_fh", "segatakai"] 
 
 TASKS_FILE = "tasks.json"
@@ -25,7 +25,6 @@ def resolve_admins(vk, raw_list):
             resolved.append(admin)
         elif isinstance(admin, str):
             try:
-                # Убираем символ @, если он есть, так как VK API его не любит
                 clean_admin = admin.replace('@', '')
                 res = vk.users.get(user_ids=clean_admin)
                 if res:
@@ -72,6 +71,8 @@ def get_main_keyboard(user_id, admin_ids):
     
     if user_id in admin_ids:
         keyboard.add_button('Добавить задание', color=VkKeyboardColor.NEGATIVE)
+        keyboard.add_button('Удалить задание', color=VkKeyboardColor.NEGATIVE)
+        keyboard.add_line()
         keyboard.add_button('Проверить работы', color=VkKeyboardColor.SECONDARY)
     return keyboard.get_keyboard()
 
@@ -235,6 +236,41 @@ def main():
                     send_msg(vk, user_id, "✅ Задание добавлено!", keyboard=get_main_keyboard(user_id, ADMIN_IDS))
                 else:
                     send_msg(vk, user_id, "❌ Ошибка формата. Используйте два разделителя |", keyboard=get_main_keyboard(user_id, ADMIN_IDS))
+
+            # НОВАЯ КОМАНДА: УДАЛЕНИЕ ЗАДАНИЯ
+            elif request == 'удалить задание' and user_id in ADMIN_IDS:
+                tasks = load_data(TASKS_FILE, list)
+                if not tasks:
+                    send_msg(vk, user_id, "📭 Список заданий пуст. Нечего удалять.", keyboard=get_main_keyboard(user_id, ADMIN_IDS))
+                else:
+                    text = "📋 Список всех заданий:\n\n"
+                    for i, task in enumerate(tasks, 1):
+                        text += f"{i}. {task['title']}\n"
+                    text += "\nВведите номер задания, которое хотите удалить (или напишите 'Отмена'):"
+                    
+                    user_states[user_id] = 'waiting_for_delete_number'
+                    send_msg(vk, user_id, text, keyboard=get_main_keyboard(user_id, ADMIN_IDS))
+
+            # ОБРАБОТКА ВВОДА НОМЕРА ДЛЯ УДАЛЕНИЯ
+            elif user_states.get(user_id) == 'waiting_for_delete_number' and user_id in ADMIN_IDS:
+                if request == 'отмена':
+                    user_states[user_id] = None
+                    send_msg(vk, user_id, "Удаление отменено.", keyboard=get_main_keyboard(user_id, ADMIN_IDS))
+                    continue
+
+                try:
+                    task_num = int(event.text.strip())
+                    tasks = load_data(TASKS_FILE, list)
+                    
+                    if 1 <= task_num <= len(tasks):
+                        deleted_task = tasks.pop(task_num - 1)
+                        save_data(TASKS_FILE, tasks)
+                        user_states[user_id] = None
+                        send_msg(vk, user_id, f"✅ Задание '{deleted_task['title']}' успешно удалено!", keyboard=get_main_keyboard(user_id, ADMIN_IDS))
+                    else:
+                        send_msg(vk, user_id, f"❌ Ошибка: нет задания с номером {task_num}. Попробуйте еще раз или напишите 'Отмена'.")
+                except ValueError:
+                    send_msg(vk, user_id, "❌ Ошибка: нужно ввести номер (число). Попробуйте еще раз или напишите 'Отмена'.")
 
             elif request == 'проверить работы' and user_id in ADMIN_IDS:
                 show_next_submission(vk, user_id, ADMIN_IDS)
