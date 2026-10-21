@@ -9,7 +9,9 @@ from vk_api.utils import get_random_id
 # НАСТРОЙКИ
 # ==========================================
 TOKEN = os.getenv('VK_TOKEN') or "ТВОЙ_ТОКЕН_ЗДЕСЬ"
-RAW_ADMIN_IDS = [577603865, 410091203, "ekaterina_zaychenko_fh", "@segatakai" ] 
+
+# ⚠️ СЮДА ДОБАВЛЕН НОВЫЙ ПРЕПОДАВАТЕЛЬ segatakai
+RAW_ADMIN_IDS = [577603865, 410091203, "ekaterina_zaychenko_fh", "segatakai"] 
 
 TASKS_FILE = "tasks.json"
 STUDENTS_FILE = "students.json"
@@ -23,13 +25,18 @@ def resolve_admins(vk, raw_list):
             resolved.append(admin)
         elif isinstance(admin, str):
             try:
-                res = vk.users.get(user_ids=admin)
+                # Убираем символ @, если он есть, так как VK API его не любит
+                clean_admin = admin.replace('@', '')
+                res = vk.users.get(user_ids=clean_admin)
                 if res:
                     resolved.append(res[0]['id'])
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Не удалось найти преподавателя {admin}: {e}")
     return resolved
 
+# ==========================================
+# ФУНКЦИИ РАБОТЫ С ФАЙЛАМИ
+# ==========================================
 def load_data(filename, default_type=dict):
     if os.path.exists(filename):
         with open(filename, "r", encoding="utf-8") as f:
@@ -52,6 +59,9 @@ def get_student(user_id):
         
     return students[sid], students
 
+# ==========================================
+# КЛАВИАТУРЫ
+# ==========================================
 def get_main_keyboard(user_id, admin_ids):
     keyboard = VkKeyboard(one_time=False)
     keyboard.add_button('Задания', color=VkKeyboardColor.POSITIVE)
@@ -74,6 +84,9 @@ def get_review_keyboard():
     keyboard.add_button('⏭ Пропустить', color=VkKeyboardColor.SECONDARY)
     return keyboard.get_keyboard()
 
+# ==========================================
+# ОТПРАВКА И ЛОГИКА
+# ==========================================
 def send_msg(vk, user_id, message, keyboard=None, forward_messages=None):
     try:
         vk.messages.send(user_id=user_id, message=message, random_id=get_random_id(), keyboard=keyboard, forward_messages=forward_messages)
@@ -94,12 +107,12 @@ def show_leaderboard(vk, user_id, admin_ids):
             leaderboard.append({"name": data.get("name", "Неизвестный"), "points": data.get("points", 0)})
     
     leaderboard.sort(key=lambda x: x["points"], reverse=True)
-    text = "🏆 **ТОП ЛУЧШИХ СТУДЕНТОВ:**\n\n"
+    text = "🏆 ТОП ЛУЧШИХ СТУДЕНТОВ:\n\n"
     medals = ["🥇", "🥈", "🥉"]
     
     for i, student in enumerate(leaderboard[:10]):
         medal = medals[i] if i < 3 else "🔹"
-        text += f"{medal} {student['name']} — **{student['points']} баллов**\n"
+        text += f"{medal} {student['name']} — {student['points']} баллов\n"
         
     send_msg(vk, user_id, text, keyboard=get_main_keyboard(user_id, admin_ids))
 
@@ -111,9 +124,9 @@ def show_next_submission(vk, admin_id, admin_ids, current_task_id=None):
             user_states[admin_id] = {'state': 'reviewing', 'task_id': sub['id']}
             
             msg = (
-                f"📥 **Работа №{sub['id']}**\n\n"
-                f"👤 **Студент:** {sub['student_info']}\n"
-                f"📝 **Задание:** {sub['task_title']}\n\n"
+                f"📥 Работа №{sub['id']}\n\n"
+                f"👤 Студент: {sub['student_info']}\n"
+                f"📝 Задание: {sub['task_title']}\n\n"
                 f"Оцените работу с помощью кнопок ниже 👇"
             )
             send_msg(vk, admin_id, msg, keyboard=get_review_keyboard(), forward_messages=sub['message_id'])
@@ -122,6 +135,9 @@ def show_next_submission(vk, admin_id, admin_ids, current_task_id=None):
     send_msg(vk, admin_id, "🎉 Все работы проверены! Новых заданий на проверку нет.", keyboard=get_main_keyboard(admin_id, admin_ids))
     user_states[admin_id] = None
 
+# ==========================================
+# ОСНОВНАЯ ЛОГИКА
+# ==========================================
 def main():
     vk_session = vk_api.VkApi(token=TOKEN)
     vk = vk_session.get_api()
@@ -146,9 +162,9 @@ def main():
                 if not tasks:
                     text = "📭 На данный момент активных заданий нет."
                 else:
-                    text = "📋 **Актуальные задания по СМИ:**\n\n"
+                    text = "📋 Актуальные задания по СМИ:\n\n"
                     for i, task in enumerate(tasks, 1):
-                        text += f"{i}️⃣ **{task['title']}**\nОписание: {task['desc']}\n⏳ Дедлайн: {task['deadline']}\n\n"
+                        text += f"{i}️⃣ {task['title']}\nОписание: {task['desc']}\n⏳ Дедлайн: {task['deadline']}\n\n"
                 send_msg(vk, user_id, text, keyboard=get_main_keyboard(user_id, ADMIN_IDS))
 
             elif request == 'топ лучших':
@@ -157,14 +173,14 @@ def main():
 
             elif request == 'помощь':
                 user_states[user_id] = None
-                help_text = "📞 **Контакты:**\nИванов И.И.\nКабинет: 302\n\n📌 **Правила:**\n1. Сдавать работы только через бота.\n2. За каждую работу преподаватель ставит от 1 до 10 баллов."
+                help_text = "📞 Контакты:\nИванов И.И.\nКабинет: 302\n\n📌 Правила:\n1. Сдавать работы только через бота.\n2. За каждую работу преподаватель ставит от 1 до 10 баллов."
                 send_msg(vk, user_id, help_text, keyboard=get_main_keyboard(user_id, ADMIN_IDS))
 
             elif request == 'сдать работу':
                 student, _ = get_student(user_id)
                 if not student:
                     user_states[user_id] = 'waiting_for_name_group'
-                    send_msg(vk, user_id, "Перед сдачей работы нужно представиться.\n\nНапишите ваше **ФИО и Группу** одним сообщением.\nПример:\n*Иванов Иван Иванович, группа ИС-21*", keyboard=get_main_keyboard(user_id, ADMIN_IDS))
+                    send_msg(vk, user_id, "Перед сдачей работы нужно представиться.\n\nНапишите ваше ФИО и Группу одним сообщением.\nПример:\nИванов Иван Иванович, группа ИС-21", keyboard=get_main_keyboard(user_id, ADMIN_IDS))
                 else:
                     user_states[user_id] = 'waiting_for_work'
                     send_msg(vk, user_id, f"Вы: {student['name']} (Баллов: {student['points']})\n\nОтправьте текст работы или прикрепите файл.", keyboard=get_main_keyboard(user_id, ADMIN_IDS))
@@ -207,7 +223,7 @@ def main():
             # --- ПРЕПОДАВАТЕЛЬСКИЕ КОМАНДЫ ---
             elif request == 'добавить задание' and user_id in ADMIN_IDS:
                 user_states[user_id] = 'waiting_for_new_task'
-                send_msg(vk, user_id, "Введите задание в формате:\n**Название** | **Описание** | **Дедлайн**\n\nПример:\nНаписать заметку | Про концерт | Пятница 18:00", keyboard=get_main_keyboard(user_id, ADMIN_IDS))
+                send_msg(vk, user_id, "Введите задание в формате:\nНазвание | Описание | Дедлайн\n\nПример:\nНаписать заметку | Про концерт | Пятница 18:00", keyboard=get_main_keyboard(user_id, ADMIN_IDS))
 
             elif user_states.get(user_id) == 'waiting_for_new_task' and user_id in ADMIN_IDS:
                 parts = [p.strip() for p in event.text.split('|')]
@@ -244,12 +260,12 @@ def main():
                     
                 elif request == '✅ оценить':
                     user_states[user_id] = {'state': 'waiting_for_grade', 'task_id': task_id}
-                    send_msg(vk, user_id, "Введите **оценку от 1 до 10** и (при желании) комментарий через пробел.\n\nПримеры:\n`8`\n`10 Отличная работа!`")
+                    send_msg(vk, user_id, "Введите оценку от 1 до 10 и (при желании) комментарий через пробел.\n\nПримеры:\n8\n10 Отличная работа!")
                     
                 elif request == '❌ отклонить':
                     current_task['status'] = 'rejected'
                     save_data(SUBMISSIONS_FILE, submissions)
-                    send_msg(vk, student_id, f"❌ **Преподаватель проверил вашу работу!**\nЗадание: {task_title}\nСтатус: **Отклонено (нужна доработка)**.")
+                    send_msg(vk, student_id, f"❌ Преподаватель проверил вашу работу!\nЗадание: {task_title}\nСтатус: Отклонено (нужна доработка).")
                     send_msg(vk, user_id, f"Работа №{task_id} отклонена.")
                     show_next_submission(vk, user_id, ADMIN_IDS)
                     
@@ -270,11 +286,11 @@ def main():
                 try:
                     points = int(text_parts[0])
                     if points < 1 or points > 10:
-                        send_msg(vk, user_id, "❌ Ошибка: оценка должна быть **от 1 до 10 баллов**. Попробуйте еще раз (например: `8 Отлично`).")
+                        send_msg(vk, user_id, "❌ Ошибка: оценка должна быть от 1 до 10 баллов. Попробуйте еще раз (например: 8 Отлично).")
                         continue
                     comment = text_parts[1] if len(text_parts) > 1 else ""
                 except ValueError:
-                    send_msg(vk, user_id, "❌ Ошибка: оценка должна быть целым числом. Попробуйте еще раз (например: `8 Отлично`).")
+                    send_msg(vk, user_id, "❌ Ошибка: оценка должна быть целым числом. Попробуйте еще раз (например: 8 Отлично).")
                     continue
 
                 student_id = current_task['student_id']
@@ -292,9 +308,9 @@ def main():
                 current_task['status'] = 'accepted'
                 save_data(SUBMISSIONS_FILE, submissions)
 
-                msg_to_student = f"✅ **Преподаватель проверил вашу работу!**\nЗадание: {task_title}\n\nВам начислено: **{points} баллов**! 🎉\nВаш баланс: {balance} баллов."
+                msg_to_student = f"✅ Преподаватель проверил вашу работу!\nЗадание: {task_title}\n\nВам начислено: {points} баллов! 🎉\nВаш баланс: {balance} баллов."
                 if comment:
-                    msg_to_student += f"\n\n💬 **Комментарий преподавателя:**\n{comment}"
+                    msg_to_student += f"\n\n💬 Комментарий преподавателя:\n{comment}"
                 
                 send_msg(vk, student_id, msg_to_student)
                 send_msg(vk, user_id, f"✅ Оценка {points} баллов сохранена. Студент уведомлен.")
@@ -310,7 +326,7 @@ def main():
                     current_task['status'] = 'commented'
                     save_data(SUBMISSIONS_FILE, submissions)
                     
-                    send_msg(vk, student_id, f"📩 **Ответ от преподавателя:**\n\n{event.text}")
+                    send_msg(vk, student_id, f"📩 Ответ от преподавателя:\n\n{event.text}")
                     send_msg(vk, user_id, f"✅ Комментарий отправлен студенту.")
                 
                 show_next_submission(vk, user_id, ADMIN_IDS)
