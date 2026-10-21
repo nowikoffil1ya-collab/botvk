@@ -9,7 +9,7 @@ from vk_api.utils import get_random_id
 # НАСТРОЙКИ
 # ==========================================
 TOKEN = os.getenv('VK_TOKEN') or "ТВОЙ_ТОКЕН_ЗДЕСЬ"
-RAW_ADMIN_IDS = [577603865, 410091203, "ekaterina_zaychenko_fh"] 
+RAW_ADMIN_IDS = [577603865, 410091203, "ekaterina_zaychenko_fh", "@segatakai" ] 
 
 TASKS_FILE = "tasks.json"
 STUDENTS_FILE = "students.json"
