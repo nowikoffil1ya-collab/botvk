@@ -174,7 +174,7 @@ def main():
 
             elif request == 'помощь':
                 user_states[user_id] = None
-                help_text = "📞 Контакты:\nСмородина Е.Л.\n ВК: @ekaterina_zaychenko_fh\n\n📌 Правила:\n1. Сдавать работы только через бота.\n2. За каждую работу преподаватель ставит от 1 до 10 баллов."
+                help_text = "📞 Контакты:\nСмородина Е.Л.\nВк:@ekaterina_zaychenko_fh\n\n📌 Правила:\n1. Сдавать работы только через бота.\n2. За каждую работу преподаватель ставит от 1 до 10 баллов."
                 send_msg(vk, user_id, help_text, keyboard=get_main_keyboard(user_id, ADMIN_IDS))
 
             elif request == 'сдать работу':
